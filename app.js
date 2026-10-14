@@ -68,7 +68,7 @@ function onPos(p){
     if(d<Math.max(3,c.accuracy/3)){upd();return}      // jitter
     if(dt>0&&d/dt>12){upd();return}                   // >43km/h glitch
     T.dist+=d;}
-  T.pts.push(pt); upd();
+  T.pts.push(pt); upd(); if(typeof runMapUpd==='function')runMapUpd();
 }
 function onErr(e){T.err=e.code===1?'위치 권한이 거부되었습니다. iPhone 설정 → 개인정보 보호 및 보안 → 위치 서비스 → Safari 웹사이트 → "앱을 사용하는 동안"으로 바꾼 뒤 새로고침하세요.':e.code===2?'GPS 신호를 찾을 수 없어요. 하늘이 트인 곳으로 이동해 보세요.':'위치 확인이 지연되고 있어요. 잠시 기다려 주세요.';
   if(e.code===1&&T.state!=='idle'&&T.pts.length===0){stopWatch();T.state='idle';const m=T.err;render();T.err=m;upd();return} upd()}
@@ -86,11 +86,11 @@ function upd(){const e=$('#live');if(!e)return;
 
 // ---------- views ----------
 let tab='home';
-function nav(){$('#tabs').innerHTML=profile?[['home','🏠','오늘'],['run','🏃','달리기'],['plan','📅','기록·플랜'],['chat','💬','AI 코치'],['set','⚙️','설정']].map(([k,i,l])=>`<a href="#" data-t="${k}" class="${tab===k?'on':''}"><b>${i}</b>${l}</a>`).join(''):'';
+function nav(){$('#tabs').innerHTML=profile?[['home','🏠','오늘'],['run','🏃','달리기'],['course','🗺️','코스'],['plan','📅','기록·플랜'],['chat','💬','AI 코치'],['set','⚙️','설정']].map(([k,i,l])=>`<a href="#" data-t="${k}" class="${tab===k?'on':''}"><b>${i}</b>${l}</a>`).join(''):'';
   document.querySelectorAll('#tabs a').forEach(a=>a.onclick=ev=>{ev.preventDefault();if(T.state==='running'||T.state==='paused'){tab='run'}else tab=a.dataset.t;render()})}
 function render(){nav();app.scrollTop=0;
   if(!profile)return onboarding();
-  ({home,run:runView,plan:planView,chat:chatView,set:settings})[tab]()}
+  ({home,course:courseView,run:runView,plan:planView,chat:chatView,set:settings})[tab]()}
 function onboarding(){app.innerHTML=`<h1>다음런에 오신 걸 환영해요 👋</h1><p class="sub">몇 가지만 알려주시면 오늘 할 운동을 정해 드려요. 기록은 이 iPhone에만 저장됩니다.</p>
  <div class="card"><b>지금 수준</b><select id="lv"><option value="0">거의 안 뛰어 봤어요</option><option value="1">런데이 등 30분 달리기 가능</option><option value="2">주 3회 이상 꾸준히 뛰어요</option></select>
  <b>목표</b><select id="goal"><option>5km 완주</option><option>10km 완주</option><option>꾸준히 건강하게</option></select>
@@ -113,20 +113,20 @@ function runView(){
  if(T.state==='checkin')return checkin();
  const p=planFor(new Date());
  app.innerHTML=`<h1>달리기</h1><p class="sub">${T.state==='idle'?(p.type==='rest'?'오늘은 휴식일이에요. 가볍게만!':`목표: ${p.title} ${p.min}분`):''}</p>
- <div class="card" id="live"></div>
+ ${T.course?`<p class="sub">🗺️ 추천 코스 ${km(T.course.dist)}km 따라 달리는 중 <a href="#" id="nc" style="float:right">코스 해제</a></p>`:''}<div id="rmap" style="height:${T.course?240:180}px;border-radius:16px;margin-bottom:10px;background:#e8ecf1"></div><div class="card" id="live"></div>
  ${T.state==='idle'?'<button class="btn" id="b1">▶ 시작</button><p class="sub" style="margin-top:10px">시작하면 위치 권한을 물어봐요. "허용"을 눌러 주세요. 달리는 동안 화면을 켜 두세요(잠그면 기록이 멈출 수 있어요).</p>':
  `<button class="btn ${T.state==='running'?'gray':'blue'}" id="b1">${T.state==='running'?'⏸ 일시정지':'▶ 다시 시작'}</button><button class="btn" id="b2" style="background:#16202c">■ 종료</button>`}`;
- upd(); $('#b1').onclick=T.state==='idle'?startRun:pauseRun; if($('#b2'))$('#b2').onclick=()=>{if(confirm('달리기를 종료할까요?'))stopRun()}}
+ upd(); runMapInit(); if($('#nc'))$('#nc').onclick=e=>{e.preventDefault();T.course=null;runView()}; $('#b1').onclick=T.state==='idle'?startRun:pauseRun; if($('#b2'))$('#b2').onclick=()=>{if(confirm('달리기를 종료할까요?'))stopRun()}}
 function checkin(){app.innerHTML=`<h1>수고했어요! 🎉</h1><div class="card"><div class="stat"><div><b>${km(T.dist)}</b>km</div><div><b>${fmtT(T.elapsed)}</b></div><div><b>${fmtP(T.elapsed,T.dist)}</b>/km</div></div></div>
  <div class="card"><b>힘든 정도 (RPE 1~10)</b><input type="range" id="rpe" min="1" max="10" value="4" oninput="rv.textContent=this.value"> <span id="rv">4</span>
  <b>통증 (0 = 없음 ~ 10)</b><input type="range" id="pain" min="0" max="10" value="0" oninput="pv.textContent=this.value"> <span id="pv">0</span>
  <b>통증 부위 (있다면)</b><input id="part" placeholder="예: 왼쪽 무릎"><b>한 줄 메모</b><input id="memo" placeholder="예: 날씨 좋았음">
  <label style="font-size:14px"><input type="checkbox" id="red" style="width:auto"> 가슴 통증·어지러움·호흡곤란·붓기/절뚝임이 있었어요</label></div>
  <button class="btn" id="sv">저장</button><button class="btn gray" id="dc">기록 버리기</button>`;
- $('#sv').onclick=()=>{const p=planFor(new Date());const r={id:Date.now(),start:T.start,dist:Math.round(T.dist),sec:Math.round(T.elapsed),rpe:+$('#rpe').value,pain:+$('#pain').value,part:$('#part').value.trim(),memo:$('#memo').value.trim(),plannedMin:p.type==='rest'?0:p.min,planType:p.type,path:T.pts.filter((x,i)=>i%5===0).map(x=>[+x.lat.toFixed(5),+x.lon.toFixed(5)])};
+ $('#sv').onclick=()=>{const p=planFor(new Date());const r={id:Date.now(),start:T.start,dist:Math.round(T.dist),sec:Math.round(T.elapsed),rpe:+$('#rpe').value,pain:+$('#pain').value,part:$('#part').value.trim(),memo:$('#memo').value.trim(),plannedMin:p.type==='rest'?0:p.min,planType:p.type,course:T.course?T.course.coords.filter((x,i)=>i%3===0).map(c=>[+c[0].toFixed(5),+c[1].toFixed(5)]):undefined,path:T.pts.filter((x,i,a)=>i%5===0||i===a.length-1).map(x=>[+x.lat.toFixed(5),+x.lon.toFixed(5)])};
   runs.push(r);LS.set('dr_runs',runs);if($('#red').checked){profile.paused=true;LS.set('dr_profile',profile);alert('위험 증상이 있으면 즉시 운동을 멈추고 의료기관에 문의하세요. 계획을 일시정지했습니다.')}
-  T.state='idle';tab='home';render()};
- $('#dc').onclick=()=>{if(confirm('이 기록을 버릴까요?')){T.state='idle';render()}}}
+  T.state='idle';T.course=null;tab='home';render()};
+ $('#dc').onclick=()=>{if(confirm('이 기록을 버릴까요?')){T.state='idle';T.course=null;render()}}}
 let calM=new Date();calM.setDate(1);
 function planView(){const y=calM.getFullYear(),m=calM.getMonth(),first=new Date(y,m,1),off=(first.getDay()+6)%7,dim=new Date(y,m+1,0).getDate();
  let cells=['월','화','수','목','금','토','일'].map(d=>`<b>${d}</b>`).join('')+'<div style="background:none"></div>'.repeat(off);
@@ -134,8 +134,9 @@ function planView(){const y=calM.getFullYear(),m=calM.getMonth(),first=new Date(
   cells+=`<div class="${r.length?'done':''} ${ymd(d)===ymd(new Date())?'today':''}"><b>${i}</b><br>${r.length?km(r.reduce((a,x)=>a+x.dist,0))+'k':p.type==='rest'?'😴':{easy:'쉬운',interval:'걷뛰',long:'롱런'}[p.type]+'<br>'+p.min+'′'}</div>`}
  const tot=runs.reduce((a,r)=>a+r.dist,0);
  app.innerHTML=`<h1>기록·플랜</h1><div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><a href="#" id="pm">◀</a><b>${y}년 ${m+1}월</b><a href="#" id="nm">▶</a></div><div class="cal">${cells}</div><p class="sub" style="margin-top:8px">초록 = 달린 날 · 😴 = 휴식</p></div>
- <h2>전체 ${runs.length}회 · ${km(tot)}km</h2>${runs.slice().reverse().map(r=>`<div class="card"><b>${new Date(r.start).toLocaleDateString('ko-KR',{month:'short',day:'numeric',weekday:'short'})}</b> · ${km(r.dist)}km · ${fmtT(r.sec)} · ${fmtP(r.sec,r.dist)}/km<br><span class="sub">RPE ${r.rpe}${r.pain?` · 통증 ${r.pain}/10 ${esc(r.part)}`:''}${r.memo?' · '+esc(r.memo):''}</span> <a href="#" data-del="${r.id}" style="float:right;color:#a12b10;font-size:12px">삭제</a></div>`).join('')||'<div class="card">아직 기록이 없어요. 첫 달리기를 시작해 보세요!</div>'}`;
+ <h2>전체 ${runs.length}회 · ${km(tot)}km</h2>${runs.slice().reverse().map(r=>`<div class="card"><b>${new Date(r.start).toLocaleDateString('ko-KR',{month:'short',day:'numeric',weekday:'short'})}</b> · ${km(r.dist)}km · ${fmtT(r.sec)} · ${fmtP(r.sec,r.dist)}/km<br><span class="sub">RPE ${r.rpe}${r.pain?` · 통증 ${r.pain}/10 ${esc(r.part)}`:''}${r.memo?' · '+esc(r.memo):''}</span> ${r.path&&r.path.length>1?`<a href="#" data-map="${r.id}" style="font-size:13px">🗺️ 경로 보기</a>`:''}<div id="hm${r.id}"></div><a href="#" data-del="${r.id}" style="float:right;color:#a12b10;font-size:12px">삭제</a></div>`).join('')||'<div class="card">아직 기록이 없어요. 첫 달리기를 시작해 보세요!</div>'}`;
  $('#pm').onclick=e=>{e.preventDefault();calM.setMonth(m-1);planView()};$('#nm').onclick=e=>{e.preventDefault();calM.setMonth(m+1);planView()};
+ document.querySelectorAll('[data-map]').forEach(a=>a.onclick=e=>{e.preventDefault();const el=$('#hm'+a.dataset.map);if(el.dataset.on)return;el.dataset.on=1;el.style.cssText='height:200px;border-radius:12px;margin-top:8px';histMap(el,runs.find(r=>r.id==a.dataset.map));a.remove()});
  document.querySelectorAll('[data-del]').forEach(a=>a.onclick=e=>{e.preventDefault();if(confirm('이 기록을 삭제할까요?')){runs=runs.filter(r=>r.id!=a.dataset.del);LS.set('dr_runs',runs);planView()}})}
 
 // ---------- rule-based coach ----------
@@ -166,7 +167,7 @@ function settings(){app.innerHTML=`<h1>설정</h1>${profile.paused?'<div class="
  <div class="card"><b>달릴 요일</b><div class="chips">${DAYS.map((d,i)=>`<label><input type="checkbox" value="${i}" ${profile.days.includes(i)?'checked':''}>${d}</label>`).join('')}</div><button class="btn" id="sd">요일 저장</button></div>
  <div class="card">목표: ${esc(profile.goal)}<br>저장된 기록: ${runs.length}개 (이 기기에만 저장)</div>
  <button class="btn gray" id="ex">기록 내보내기(JSON 복사)</button><button class="btn" style="background:#a12b10" id="rst">모든 데이터 초기화</button>
- <p class="sub" style="margin-top:12px">다음런 웹앱 v1 · 데이터는 Safari 저장소에만 있어요. Safari 방문 기록/웹사이트 데이터를 지우면 함께 삭제됩니다.</p>`;
+ <p class="sub" style="margin-top:12px">다음런 웹앱 v2 · 데이터는 Safari 저장소에만 있어요. Safari 방문 기록/웹사이트 데이터를 지우면 함께 삭제됩니다.</p>`;
  if($('#rs'))$('#rs').onclick=()=>{profile.paused=false;LS.set('dr_profile',profile);settings()};
  $('#sd').onclick=()=>{const d=[...document.querySelectorAll('.chips input:checked')].map(x=>+x.value);if(d.length<2||d.length>5)return alert('2~5일을 골라 주세요(주 2일 이상 휴식).');profile.days=d;LS.set('dr_profile',profile);alert('저장했어요.')};
  $('#ex').onclick=async()=>{const t=JSON.stringify({profile,runs});try{await navigator.clipboard.writeText(t);alert('복사했어요. 메모 앱에 붙여 넣어 보관하세요.')}catch(e){prompt('아래 내용을 복사하세요',t)}};
