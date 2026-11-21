@@ -1,7 +1,3 @@
-<div align="right">
-<a href="https://jonghun9982-crypto.github.io/daumrun/">Live</a>
-</div>
-
 # 다음런
 
 달리기 기록·계획·코스 추천 웹앱 (아이폰 홈 화면 앱 지원)
